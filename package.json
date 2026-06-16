@@ -1,6 +1,6 @@
 {
   "name": "@lglen/bing-image-search",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TypeScript SDK for searching and downloading images from Bing. Returns Bing-hosted thumbnail URLs (safe for <img> tags) and supports batch image downloads with deduplication.",
   "type": "module",
   "license": "MIT",
