@@ -1,5 +1,11 @@
 # Agents.md
 
-Fork of kts-o7/better_bing_image_downloader for one reason, port the python code in ./python/ into typescript code in ./typescript/
+-  Typescript project used for fetching images from bing
+-  Standard typescript project, main files in src
 
-Start simple, port basic functionality first and confirm it works at each step.
+-  Entry point is in index.ts
+
+-  src
+  -  bing-media.ts grab image urls
+  -  bing.ts download images
+  -  rest are test scripts and types
