@@ -1,17 +1,47 @@
 {
-  "name": "better-bing-image-downloader",
+  "name": "@lglen/bing-image-search",
   "version": "0.1.0",
+  "description": "TypeScript SDK for searching and downloading images from Bing. Returns Bing-hosted thumbnail URLs (safe for <img> tags) and supports batch image downloads with deduplication.",
   "type": "module",
+  "license": "MIT",
+  "author": "",
+  "keywords": [
+    "bing",
+    "image-search",
+    "image-downloader",
+    "bing-images",
+    "thumbnail",
+    "sdk",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "tsc --build --clean",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "dotenv": "^17.4.2",
     "typescript": "~6.0.2"
-  },
-  "dependencies": {
-    "dotenv": "^17.4.2"
   }
 }
