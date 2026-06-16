@@ -1,0 +1,17 @@
+{
+  "name": "better-bing-image-downloader",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "clean": "tsc --build --clean",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~6.0.2"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
