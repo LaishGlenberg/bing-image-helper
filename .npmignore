@@ -1,0 +1,26 @@
+# Source tests — not needed at runtime
+src/test-*.ts
+src/**/*.test.ts
+src/**/*.spec.ts
+
+# Test output artifacts
+test-output/
+test-scripts/
+
+# Dev config
+.env
+.env.*
+.vscode/
+.idea/
+*.sw?
+
+# Node/npm noise
+node_modules
+*.log
+npm-debug.log*
+
+# Build artifacts (we ship dist, not src)
+src/
+tsconfig.json
+.npmignore
+.gitignore
