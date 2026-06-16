@@ -24,10 +24,16 @@ const results = await searchBingImages({
   mkt: "en-US",       // default
 });
 
-// results[0].thumbnailUrl → "https://ts1.mm.bing.net/th?id=..."
-// results[0].sourceUrl    → original source URL
-// results[0].title        → alt text
-// results[0].width/height → dimensions (0 if unknown)
+console.log(`Found ${results.length} results:\n`);
+
+for (const r of results) {
+  console.log(`  Title: ${r.title || "(none)"}`);
+  console.log(`  Source: ${r.sourceUrl.substring(0, 100)}...`);
+  console.log(`  Thumb:  ${r.thumbnailUrl.substring(0, 100)}...`);
+  console.log(`  Page:  ${r.pageUrl.substring(0, 100)}...`);
+  console.log(`  Size:   ${r.width}x${r.height}`);
+  console.log();
+}
 ```
 
 ### `Bing` class — download images to disk

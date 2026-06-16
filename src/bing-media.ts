@@ -29,6 +29,8 @@ export interface BingImageResult {
   thumbnailUrl: string;
   /** The original source URL (may 403 if the host blocks hotlinking). */
   sourceUrl: string;
+  /** The webpage URL that contains this image (the page it links to). */
+  pageUrl: string;
   /** Title/alt text from the search result. */
   title: string;
   /** Width of the full image in pixels (0 if unknown). */
@@ -113,6 +115,7 @@ export async function searchBingImages(
       results.push({
         thumbnailUrl: card.turl ?? sourceUrl,
         sourceUrl,
+        pageUrl: card.purl ?? "",
         title: card.desc ?? "",
         width: card.width ?? 0,
         height: card.height ?? 0,
@@ -134,6 +137,7 @@ export async function searchBingImages(
 interface ImageCard {
   murl?: string; // source URL
   turl?: string; // Bing thumbnail URL
+  purl?: string; // page URL (the webpage containing the image)
   desc?: string; // title/alt text
   width?: number;
   height?: number;
@@ -159,6 +163,7 @@ function parseImageCards(html: string): ImageCard[] {
 
       if (m.murl) card.murl = m.murl;
       if (m.turl) card.turl = m.turl;
+      if (m.purl) card.purl = m.purl;
       if (m.desc) card.desc = m.desc;
       if (m.w) card.width = Number(m.w);
       if (m.h) card.height = Number(m.h);
@@ -169,7 +174,7 @@ function parseImageCards(html: string): ImageCard[] {
     }
   }
 
-  // Fallback: if the JSON approach didn't work, regex the turl/murl directly.
+  // Fallback: if the JSON approach didn't work, regex the turl/murl/purl directly.
   if (cards.length === 0) {
     const murls = [...html.matchAll(/murl&quot;:&quot;(.*?)&quot;/g)].map(
       (m) => m[1],
@@ -177,11 +182,15 @@ function parseImageCards(html: string): ImageCard[] {
     const turls = [...html.matchAll(/turl&quot;:&quot;(.*?)&quot;/g)]
       .map((m) => m[1])
       .filter(Boolean);
+    const purls = [...html.matchAll(/purl&quot;:&quot;(.*?)&quot;/g)]
+      .map((m) => m[1])
+      .filter(Boolean);
 
-    for (let i = 0; i < Math.max(murls.length, turls.length); i++) {
+    for (let i = 0; i < Math.max(murls.length, turls.length, purls.length); i++) {
       cards.push({
         murl: murls[i] ?? undefined,
         turl: turls[i] ?? undefined,
+        purl: purls[i] ?? undefined,
       });
     }
   }

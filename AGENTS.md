@@ -50,7 +50,7 @@ dist/               Compiled output (emitted by tsc, shipped in the npm package)
 ### `searchBingImages()` (src/bing-media.ts)
 
 - Extracts image metadata from Bing's JSON attributes (`m="{...}"`) in the HTML
-- Returns `BingImageResult[]` with `thumbnailUrl` (Bing CDN), `sourceUrl`, `title`, `width`, `height`
+- Returns `BingImageResult[]` with `thumbnailUrl` (Bing CDN), `sourceUrl`, `pageUrl`, `title`, `width`, `height`
 - Deduplicates by both thumbnail URL and source URL
 - Falls back to regex extraction if JSON parsing fails
 - **Use case**: embed search results in a website — these URLs don't 403

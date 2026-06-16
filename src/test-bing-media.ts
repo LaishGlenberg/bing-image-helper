@@ -6,7 +6,7 @@
 import { searchBingImages } from "./bing-media.js";
 
 async function main() {
-  const queries = ["cats", "Laish Glenberg LinkedIn ASU CS"];
+  const queries = ["Laish Glenberg LinkedIn ASU CS"];
 
   for (const query of queries) {
     console.log(`\n=== "${query}" ===\n`);
@@ -16,8 +16,9 @@ async function main() {
 
     for (const r of results) {
       console.log(`  Title: ${r.title || "(none)"}`);
-      console.log(`  Source: ${r.sourceUrl.substring(0, 80)}...`);
-      console.log(`  Thumb:  ${r.thumbnailUrl.substring(0, 80)}...`);
+      console.log(`  Source: ${r.sourceUrl.substring(0, 100)}...`);
+      console.log(`  Thumb:  ${r.thumbnailUrl.substring(0, 100)}...`);
+      console.log(`  Page:  ${r.pageUrl.substring(0, 100)}...`);
       console.log(`  Size:   ${r.width}x${r.height}`);
       console.log();
     }
