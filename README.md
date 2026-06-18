@@ -2,6 +2,8 @@
 
 TypeScript SDK for searching and downloading images from Bing. ESM only.
 
+Originally started as a fork from the better-bing-image-downloader python projec to port basic functionality into typescript. The regular bing image downloader is part of the OG fork. The new thumbnail grabber API is my own work, including the custom logging framework. There is more to come!
+
 ## Install
 
 ```bash
