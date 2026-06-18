@@ -75,12 +75,12 @@ import { ImageSaveError, NetworkError } from "@lglen/bing-image-search";
 Debug logging is **off by default**. Enable it to see internal requests, parsed data, and errors:
 
 ```ts
-import { debug } from "@lglen/bing-image-search";
+import { debug, TraceEvents } from "@lglen/bing-image-search";
 
 debug.enable("trace", {
-  parsed_card_json: 5,    // cap the per-card JSON parse log at 5 entries
-  accepted_result: 20,    // cap accepted results at 20
-  deduped_thumbnail: 10,  // only 10 dedupe messages
+  [TraceEvents.BingMedia.ParsedCardJson]: 5,
+  [TraceEvents.BingMedia.AcceptedResult]: 20,
+  [TraceEvents.Bing.FileExists]: 10,
 });
 
 // Reset counters between runs:

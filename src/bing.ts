@@ -21,8 +21,10 @@ import {
   DEFAULT_HEADERS,
 } from "./constants.js";
 import { createLogger, debug } from "./debug.js";
+import { TraceEvents } from "./trace-events.js";
 
 const log = createLogger("bing");
+const T = TraceEvents.Bing;
 
 const PAGE_SIZE = 35;
 const BACKOFF_INITIAL = 2.0;
@@ -241,10 +243,10 @@ export class Bing {
           const alreadySeen = this.seen.has(link);
           const isBadsite = [...this.badsites].some((bs) => link.includes(bs));
           if (alreadySeen) {
-            log.trace("filtered_seen", { url: link.substring(0, 120) });
+            log.trace(T.FilteredSeen, { url: link.substring(0, 120) });
           }
           if (isBadsite) {
-            log.trace("filtered_badsite", { url: link.substring(0, 120) });
+            log.trace(T.FilteredBadsite, { url: link.substring(0, 120) });
           }
           return !alreadySeen && !isBadsite;
         },
@@ -315,7 +317,7 @@ export class Bing {
     let ext = extname(urlPath).replace(".", "").toLowerCase();
 
     if (!VALID_IMAGE_EXTENSIONS.has(ext)) {
-      log.trace("ext_fallback", {
+      log.trace(T.ExtFallback, {
         originalExt: ext,
         urlPath: urlPath.substring(0, 120),
       });
@@ -327,7 +329,7 @@ export class Bing {
       `${this.imageName}_${index}.${ext}`,
     );
 
-    log.trace("target_file_path", { index, filePath, ext, sourceUrl: link.substring(0, 120) });
+    log.trace(T.TargetFilePath, { index, filePath, ext, sourceUrl: link.substring(0, 120) });
 
     // Resume: skip if file already exists
     if (!this.forceReplace) {
@@ -337,15 +339,15 @@ export class Bing {
         );
         if (stat.isFile()) {
           log.info(`Skipping existing image #${index}`);
-          log.trace("file_exists", { filePath, size: stat.size });
+          log.trace(T.FileExists, { filePath, size: stat.size });
           this.skipped++;
           return "skip";
         }
       } catch {
-        log.trace("file_not_found", { filePath });
+        log.trace(T.FileNotFound, { filePath });
       }
     } else {
-      log.trace("force_replace", { filePath });
+      log.trace(T.ForceReplace, { filePath });
     }
 
     log.debug(`Downloading image #${index}`, { url: link });
@@ -378,7 +380,7 @@ export class Bing {
         signal: AbortSignal.timeout(this.timeout * 1000),
       });
 
-      log.trace("fetch_response", {
+      log.trace(T.FetchResponse, {
         url: link.substring(0, 120),
         status: resp.status,
         statusText: resp.statusText,
@@ -395,7 +397,7 @@ export class Bing {
       }
     } catch (e) {
       if (e instanceof NetworkError) throw e;
-      log.trace("fetch_error", {
+      log.trace(T.FetchError, {
         url: link.substring(0, 120),
         error: (e as Error).message,
         errorType: (e as Error).constructor.name,
@@ -414,7 +416,7 @@ export class Bing {
       status: resp.status,
     });
     if (!contentType.startsWith("image/")) {
-      log.trace("invalid_content_type", {
+      log.trace(T.InvalidContentType, {
         url: link.substring(0, 120),
         contentType,
       });
@@ -423,7 +425,7 @@ export class Bing {
 
     // MD5 dedup
     const fileHash = createHash("md5").update(image).digest("hex");
-    log.trace("computed_md5", { hash: fileHash, url: link.substring(0, 100) });
+    log.trace(T.ComputedMd5, { hash: fileHash, url: link.substring(0, 100) });
     if (this.fileHashes.has(fileHash)) {
       log.debug("Duplicate image skipped (MD5)", { url: link.substring(0, 100) });
       throw new DuplicateImageError(link);
@@ -434,7 +436,7 @@ export class Bing {
     const ext = MIME_TO_EXT[contentType.split(";")[0]] ?? "jpg";
     const finalPath = filePath.replace(/\.[^.]+$/, `.${ext}`);
 
-    log.trace("resolved_ext", {
+    log.trace(T.ResolvedExt, {
       contentType,
       ext,
       requestedPath: filePath,
@@ -443,13 +445,13 @@ export class Bing {
 
     // Atomic write: temp file → rename
     const tmpPath = join(tmpdir(), `.tmp_${basename(finalPath)}_${Date.now()}`);
-    log.trace("atomic_write", { tmpPath, finalPath, size: image.byteLength });
+    log.trace(T.AtomicWrite, { tmpPath, finalPath, size: image.byteLength });
     try {
       await writeFile(tmpPath, image);
       await rename(tmpPath, finalPath);
       log.debug("Image saved", { path: finalPath, size: image.byteLength });
     } catch (e) {
-      log.trace("write_failed", {
+      log.trace(T.WriteFailed, {
         tmpPath,
         finalPath,
         error: (e as Error).message,
@@ -476,7 +478,7 @@ export class Bing {
       sizeBytes: image.byteLength,
       mimeType: contentType.split(";")[0],
     };
-    log.trace("recorded_result", result);
+    log.trace(T.RecordedResult, result);
     this.images.push(result);
   }
 

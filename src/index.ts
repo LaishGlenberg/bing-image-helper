@@ -32,6 +32,8 @@ export type { ImageResult, Result } from "./types.js";
 
 export { debug } from "./debug.js";
 export type { LogLevel, LogEntry, LogHandler } from "./debug.js";
+export { TraceEvents } from "./trace-events.js";
+export type { TraceEventId } from "./trace-events.js";
 
 // ─── Error hierarchy ─────────────────────────────────────────────────
 

@@ -4,13 +4,12 @@
  */
 
 import { searchBingImages } from "./bing-media.js";
-import { debug } from "./debug.js";
+import { debug, TraceEvents } from "./index.js";
 
 async function main() {
   debug.enable("trace", {
-    parsed_card_json: 5,
-    /* accepted_result: 20,
-    deduped_thumbnail: 10, */
+    [TraceEvents.BingMedia.ParsedCardJson]: 5,
+    [TraceEvents.BingMedia.AcceptedResult]: 20,
   });
   const queries = ["cats"];
 

@@ -14,8 +14,10 @@
  */
 
 import { createLogger } from "./debug.js";
+import { TraceEvents } from "./trace-events.js";
 
 const log = createLogger("bing-media");
+const T = TraceEvents.BingMedia;
 const PAGE_SIZE = 35;
 
 const HEADERS: Record<string, string> = {
@@ -125,7 +127,7 @@ export async function searchBingImages(
       // Dedupe by thumbnail URL (Bing sometimes repeats)
       const thumbKey = card.turl ?? card.murl;
       if (!thumbKey || seenThumbUrls.has(thumbKey)) {
-        log.trace("deduped_thumbnail", {
+        log.trace(T.DedupedThumbnail, {
           thumbKey: thumbKey?.substring(0, 100),
           reason: !thumbKey ? "no thumbnail key" : "already seen",
         });
@@ -134,14 +136,14 @@ export async function searchBingImages(
 
       const sourceUrl = card.murl ?? "";
       if (sourceUrl && seenSourceUrls.has(sourceUrl)) {
-        log.trace("deduped_source", { sourceUrl: sourceUrl.substring(0, 100) });
+        log.trace(T.DedupedSource, { sourceUrl: sourceUrl.substring(0, 100) });
         continue;
       }
 
       if (sourceUrl) seenSourceUrls.add(sourceUrl);
       if (thumbKey) seenThumbUrls.add(thumbKey);
 
-      log.trace("accepted_result", {
+      log.trace(T.AcceptedResult, {
         index: results.length,
         thumb: card.turl?.substring(0, 100),
         source: sourceUrl.substring(0, 100),
@@ -223,7 +225,7 @@ function parseImageCards(html: string): ImageCard[] {
       if (m.w) card.width = Number(m.w);
       if (m.h) card.height = Number(m.h);
 
-      log.trace("parsed_card_json", {
+      log.trace(T.ParsedCardJson, {
         murl: m.murl?.substring(0, 120),
         turl: m.turl?.substring(0, 120),
         purl: m.purl?.substring(0, 120),
@@ -234,7 +236,7 @@ function parseImageCards(html: string): ImageCard[] {
 
       cards.push(card);
     } catch {
-      log.trace("skipped_malformed_card", { raw: match[0].substring(0, 200) });
+      log.trace(T.SkippedMalformedCard, { raw: match[0].substring(0, 200) });
       // Skip malformed entries
     }
   }
