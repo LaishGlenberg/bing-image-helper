@@ -77,17 +77,19 @@ Debug logging is **off by default**. Enable it to see internal requests, parsed 
 ```ts
 import { debug } from "@lglen/bing-image-search";
 
-debug.enable();                     // default level: "debug"
-debug.setLevel("info");             // quieter — only info, warn, error
-debug.setLevel("trace");            // FULL debug output, quite large
+debug.enable("trace", {
+  parsed_card_json: 5,    // cap the per-card JSON parse log at 5 entries
+  accepted_result: 20,    // cap accepted results at 20
+  deduped_thumbnail: 10,  // only 10 dedupe messages
+});
+
+// Reset counters between runs:
+debug.resetCounts();
 ```
 
-**Custom handler** — useful for Firebase Cloud Functions or structured logging:
+**Custom handler** — for Firebase Cloud Functions or structured logging:
 
 ```ts
-import { debug } from "@lglen/bing-image-search";
-
-debug.enable();
 debug.setHandler((entry) => {
   // entry.timestamp, entry.level, entry.module, entry.message, entry.data
   console.log(JSON.stringify(entry));
@@ -95,6 +97,8 @@ debug.setHandler((entry) => {
 ```
 
 Levels: `"off"` | `"error"` | `"warn"` | `"info"` | `"debug"` | `"trace"`
+
+> **Tip:** "trace" level logs are rate-limited internally to avoid flooding — noisy per-item logs auto-cap at 5–20 entries. Call `debug.resetCounts()` to reset the caps between runs.
 
 ## License
 

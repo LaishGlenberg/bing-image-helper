@@ -125,7 +125,7 @@ export async function searchBingImages(
       // Dedupe by thumbnail URL (Bing sometimes repeats)
       const thumbKey = card.turl ?? card.murl;
       if (!thumbKey || seenThumbUrls.has(thumbKey)) {
-        log.trace("Deduped by thumbnail URL", {
+        log.trace("deduped_thumbnail", {
           thumbKey: thumbKey?.substring(0, 100),
           reason: !thumbKey ? "no thumbnail key" : "already seen",
         });
@@ -134,14 +134,14 @@ export async function searchBingImages(
 
       const sourceUrl = card.murl ?? "";
       if (sourceUrl && seenSourceUrls.has(sourceUrl)) {
-        log.trace("Deduped by source URL", { sourceUrl: sourceUrl.substring(0, 100) });
+        log.trace("deduped_source", { sourceUrl: sourceUrl.substring(0, 100) });
         continue;
       }
 
       if (sourceUrl) seenSourceUrls.add(sourceUrl);
       if (thumbKey) seenThumbUrls.add(thumbKey);
 
-      log.trace("Accepted result", {
+      log.trace("accepted_result", {
         index: results.length,
         thumb: card.turl?.substring(0, 100),
         source: sourceUrl.substring(0, 100),
@@ -223,7 +223,7 @@ function parseImageCards(html: string): ImageCard[] {
       if (m.w) card.width = Number(m.w);
       if (m.h) card.height = Number(m.h);
 
-      log.trace("Parsed card (JSON)", {
+      log.trace("parsed_card_json", {
         murl: m.murl?.substring(0, 120),
         turl: m.turl?.substring(0, 120),
         purl: m.purl?.substring(0, 120),
@@ -234,7 +234,7 @@ function parseImageCards(html: string): ImageCard[] {
 
       cards.push(card);
     } catch {
-      log.trace("Skipped malformed JSON card", { raw: match[0].substring(0, 200) });
+      log.trace("skipped_malformed_card", { raw: match[0].substring(0, 200) });
       // Skip malformed entries
     }
   }

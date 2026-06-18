@@ -7,7 +7,11 @@ import { searchBingImages } from "./bing-media.js";
 import { debug } from "./debug.js";
 
 async function main() {
-  debug.enable('trace');
+  debug.enable("trace", {
+    parsed_card_json: 5,
+    /* accepted_result: 20,
+    deduped_thumbnail: 10, */
+  });
   const queries = ["cats"];
 
   for (const query of queries) {

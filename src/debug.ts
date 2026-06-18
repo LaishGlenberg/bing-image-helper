@@ -79,6 +79,15 @@ function shouldLog(level: LogLevel): boolean {
 
 function emit(level: LogLevel, module: string, message: string, data?: unknown): void {
   if (!shouldLog(level)) return;
+
+  // Rate-limit: if a limit is configured for this message key, enforce it.
+  const limit = limits.get(message);
+  if (limit !== undefined) {
+    const count = (counterMap.get(message) ?? 0) + 1;
+    counterMap.set(message, count);
+    if (count > limit) return;
+  }
+
   const entry: LogEntry = {
     timestamp: new Date().toISOString(),
     level,
@@ -89,13 +98,31 @@ function emit(level: LogLevel, module: string, message: string, data?: unknown):
   currentHandler(entry);
 }
 
+// Consumer-configured per-message limits (set via debug.enable(level, limits)).
+const limits = new Map<string, number>();
+// Running invocation counts per message key.
+const counterMap = new Map<string, number>();
+
 // ─── Public API (consumer-facing) ────────────────────────────────────
 
 /** Global debug configuration. */
 export const debug = {
-  /** Enable debug logging at the given level (default "debug"). */
-  enable(level: LogLevel = "debug"): void {
+  /**
+   * Enable debug logging at the given level (default "debug").
+   *
+   * Optionally pass per-message rate limits to cap noisy trace logs:
+   * ```ts
+   * debug.enable("trace", { parsed_card_json: 5, accepted_result: 20 });
+   * ```
+   */
+  enable(level: LogLevel = "debug", rateLimits?: Record<string, number>): void {
     currentLevel = level;
+    if (rateLimits) {
+      limits.clear();
+      for (const [key, n] of Object.entries(rateLimits)) {
+        if (n > 0) limits.set(key, n);
+      }
+    }
   },
 
   /** Disable all debug logging. */
@@ -103,9 +130,18 @@ export const debug = {
     currentLevel = "off";
   },
 
-  /** Set the minimum log level. */
-  setLevel(level: LogLevel): void {
+  /**
+   * Set the minimum log level, optionally with per-message rate limits.
+   * Same signature as `enable()` — keeps any existing limits if none are passed.
+   */
+  setLevel(level: LogLevel, rateLimits?: Record<string, number>): void {
     currentLevel = level;
+    if (rateLimits) {
+      limits.clear();
+      for (const [key, n] of Object.entries(rateLimits)) {
+        if (n > 0) limits.set(key, n);
+      }
+    }
   },
 
   /** Get the current log level. */
@@ -126,6 +162,14 @@ export const debug = {
    */
   setHandler(handler: LogHandler): void {
     currentHandler = handler;
+  },
+
+  /**
+   * Reset all per-message invocation counters.
+   * Useful between runs if you want fresh rate-limit tracking.
+   */
+  resetCounts(): void {
+    counterMap.clear();
   },
 };
 

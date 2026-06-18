@@ -65,8 +65,9 @@ dist/               Compiled output (emitted by tsc, shipped in the npm package)
 - `debug.setHandler(entry => ...)` — replace console output with custom logger (Firebase, pino, winston)
 - Each module creates its own logger via `createLogger("moduleName")` with `.debug()`, `.info()`, `.warn()`, `.error()` methods
 - The `Bing` class auto-enables debug at `"info"` level when `verbose: true` is passed
-- Log levels: `"off"` | `"error"` | `"warn"` | `"info"` | `"debug"`
+- Log levels: `"off"` | `"error"` | `"warn"` | `"info"` | `"debug"` | `"trace"`
 - Structured log entries include `timestamp`, `level`, `module`, `message`, `data`
+- **Rate-limiting**: consumer-controlled via `debug.enable("trace", { parsed_card_json: 5 })`. Each log message acts as its own identifier — if a limit is configured for that message key, the logger tracks a counter and stops emitting after the limit. The source code uses short snake_case identifiers for noisy per-item trace messages (e.g. `log.trace("parsed_card_json", {...})`). Call `debug.resetCounts()` to reset counters between runs.
 
 ## Adding a new API / engine
 
