@@ -85,7 +85,22 @@ function emit(level: LogLevel, module: string, message: string, data?: unknown):
   if (limit !== undefined) {
     const count = (counterMap.get(message) ?? 0) + 1;
     counterMap.set(message, count);
-    if (count > limit) return;
+
+    if (count > limit) {
+      // Over cap — track as a silent skip.
+      if (lastCappedKey !== message) {
+        flushSkipped();
+        lastCappedKey = message;
+        lastCappedModule = module;
+      }
+      skipCount++;
+      return;
+    }
+  }
+
+  // About to emit. If a different key was being silently skipped, flush the summary first.
+  if (lastCappedKey && lastCappedKey !== message) {
+    flushSkipped();
   }
 
   const entry: LogEntry = {
@@ -96,6 +111,30 @@ function emit(level: LogLevel, module: string, message: string, data?: unknown):
     data,
   };
   currentHandler(entry);
+}
+
+// ─── Skip tracking ───────────────────────────────────────────────────
+
+// The message key currently being silently skipped (over cap), if any.
+let lastCappedKey: string | null = null;
+let lastCappedModule = "";
+let skipCount = 0;
+
+/** Print a summary of skipped calls for the last capped key, then reset. */
+function flushSkipped(): void {
+  if (lastCappedKey && skipCount > 0) {
+    const entry: LogEntry = {
+      timestamp: new Date().toISOString(),
+      level: "info",
+      module: lastCappedModule,
+      message: lastCappedKey,
+      data: { skipped: skipCount },
+    };
+    currentHandler(entry);
+    lastCappedKey = null;
+    lastCappedModule = "";
+    skipCount = 0;
+  }
 }
 
 // Consumer-configured per-message limits (set via debug.enable(level, limits)).
@@ -118,6 +157,8 @@ export const debug = {
   enable(level: LogLevel = "debug", rateLimits?: Record<string, number>): void {
     currentLevel = level;
     if (rateLimits) {
+      flushSkipped();
+      counterMap.clear();
       limits.clear();
       for (const [key, n] of Object.entries(rateLimits)) {
         if (n > 0) limits.set(key, n);
@@ -127,6 +168,7 @@ export const debug = {
 
   /** Disable all debug logging. */
   disable(): void {
+    flushSkipped();
     currentLevel = "off";
   },
 
@@ -137,6 +179,8 @@ export const debug = {
   setLevel(level: LogLevel, rateLimits?: Record<string, number>): void {
     currentLevel = level;
     if (rateLimits) {
+      flushSkipped();
+      counterMap.clear();
       limits.clear();
       for (const [key, n] of Object.entries(rateLimits)) {
         if (n > 0) limits.set(key, n);
@@ -169,6 +213,7 @@ export const debug = {
    * Useful between runs if you want fresh rate-limit tracking.
    */
   resetCounts(): void {
+    flushSkipped();
     counterMap.clear();
   },
 };
