@@ -20,6 +20,9 @@ import {
   MIME_TO_EXT,
   DEFAULT_HEADERS,
 } from "./constants.js";
+import { createLogger, debug } from "./debug.js";
+
+const log = createLogger("bing");
 
 const PAGE_SIZE = 35;
 const BACKOFF_INITIAL = 2.0;
@@ -71,11 +74,17 @@ export class Bing {
     this.adult = options.adult ?? "moderate";
     this.timeout = options.timeout ?? 60;
     this.filter = options.filter ?? "";
-    this.verbose = options.verbose ?? true;
+    this.verbose = options.verbose ?? false;
     this.badsites = new Set(options.badsites ?? []);
     this.imageName = options.name ?? "Image";
     this.forceReplace = options.forceReplace ?? false;
     this.mkt = options.mkt ?? "en-US";
+
+    // Wire verbose into the global debug system so consumers
+    // can set a custom handler and still see Bing download logs.
+    if (this.verbose && debug.getLevel() === "off") {
+      debug.enable("info");
+    }
   }
 
   // ─── filter shorthand → Bing filterui string ──────────────────────
@@ -116,12 +125,23 @@ export class Bing {
 
   private async fetchPage(page: number): Promise<string> {
     const url = this.buildPageUrl(page);
+    log.trace("Fetching Bing page", { page, url: url.substring(0, 200) });
+
     const resp = await fetch(url, {
       headers: {
         ...DEFAULT_HEADERS,
         Referer: "https://www.bing.com/",
       },
       signal: AbortSignal.timeout(this.timeout * 1000),
+    });
+
+    log.trace("Bing page response", {
+      page,
+      status: resp.status,
+      statusText: resp.statusText,
+      contentType: resp.headers.get("content-type"),
+      contentEncoding: resp.headers.get("content-encoding"),
+      contentLength: resp.headers.get("content-length"),
     });
 
     if (!resp.ok) {
@@ -134,34 +154,55 @@ export class Bing {
     const buf = new Uint8Array(await resp.arrayBuffer());
     const enc = resp.headers.get("Content-Encoding");
     if (enc === "gzip") {
+      log.trace("Manually gunzipping response", { page });
       try {
-        return new TextDecoder().decode(gunzipSync(buf));
+        const decoded = new TextDecoder().decode(gunzipSync(buf));
+        log.trace("HTML after gunzip", { page, length: decoded.length, preview: decoded.substring(0, 400) });
+        return decoded;
       } catch {
-        // Already decompressed by fetch — decode as-is
+        log.trace("Gunzip failed — treating as already decompressed", { page });
       }
     }
-    return new TextDecoder().decode(buf);
+    const html = new TextDecoder().decode(buf);
+    log.trace("HTML decoded", { page, length: html.length, preview: html.substring(0, 400) });
+    return html;
   }
 
   // ─── Extract image URLs from Bing HTML ────────────────────────────
 
   private extractLinks(html: string): string[] {
     const re = /murl&quot;:&quot;(.*?)&quot;/g;
-    return [...html.matchAll(re)].map((m) => m[1]);
+    const links = [...html.matchAll(re)].map((m) => m[1]);
+    log.trace("Extracted source URLs", {
+      count: links.length,
+      samples: links.slice(0, 5).map((l) => l.substring(0, 120)),
+    });
+    return links;
   }
 
   // ─── Main run loop ────────────────────────────────────────────────
 
   async run(): Promise<void> {
+    log.trace("Bing download run starting", {
+      query: this.query,
+      limit: this.limit,
+      outputDir: this.outputDir,
+      adult: this.adult,
+      timeout: this.timeout,
+      filter: this.filter,
+      forceReplace: this.forceReplace,
+      verbose: this.verbose,
+      mkt: this.mkt,
+      badsites: [...this.badsites],
+      imageName: this.imageName,
+    });
     await mkdir(this.outputDir, { recursive: true });
 
     let pageCounter = 0;
     let slotsUsed = 0;
 
     while (slotsUsed < this.limit) {
-      if (this.verbose) {
-        console.log(`\n[!] Indexing page: ${pageCounter + 1}`);
-      }
+      log.info(`Indexing page ${pageCounter + 1}`, { query: this.query });
 
       // Fetch page
       let html: string;
@@ -170,37 +211,53 @@ export class Bing {
       } catch (e) {
         if (e instanceof NetworkError) {
           const wait = this.consumeBackoff();
-          console.error(
-            `Network error requesting Bing: ${e.message}. Retrying in ${wait.toFixed(1)}s.`,
-          );
+          log.warn("Network error — retrying", {
+            error: e.message,
+            retryInSec: wait,
+            page: pageCounter,
+          });
           await sleep(wait * 1000);
           continue;
         }
-        console.error(`Unexpected error: ${e}`);
+        log.error("Unexpected error fetching page", {
+          error: String(e),
+          page: pageCounter,
+        });
         break;
       }
 
       if (!html) {
-        console.log("[%] No more images are available");
+        log.info("No more images available — empty response");
         this.noResultsFound = true;
         break;
       }
 
       // Extract + filter links
       const links = this.extractLinks(html);
-      if (this.verbose) {
-        console.log(
-          `[%] Indexed ${links.length} Images on Page ${pageCounter + 1}.`,
-        );
-      }
+      log.info(`Indexed ${links.length} images on page ${pageCounter + 1}`);
 
       const filtered = links.filter(
-        (link) =>
-          !this.seen.has(link) &&
-          ![...this.badsites].some((bs) => link.includes(bs)),
+        (link) => {
+          const alreadySeen = this.seen.has(link);
+          const isBadsite = [...this.badsites].some((bs) => link.includes(bs));
+          if (alreadySeen) {
+            log.trace("Filtered link — already seen", { url: link.substring(0, 120) });
+          }
+          if (isBadsite) {
+            log.trace("Filtered link — badsite match", { url: link.substring(0, 120) });
+          }
+          return !alreadySeen && !isBadsite;
+        },
       );
+      log.trace("Link filtering stats", {
+        page: pageCounter,
+        total: links.length,
+        kept: filtered.length,
+        seen: this.seen.size,
+        badsites: [...this.badsites],
+      });
       if (filtered.length === 0) {
-        console.log("[%] No new images are available");
+        log.info("No new images available on this page");
         break;
       }
       for (const link of filtered) this.seen.add(link);
@@ -208,6 +265,15 @@ export class Bing {
       const remaining = this.limit - slotsUsed;
       const toDownload = filtered.slice(0, remaining);
       const slotsBefore = slotsUsed;
+
+      log.trace("Download batch", {
+        page: pageCounter,
+        toDownload: toDownload.length,
+        remaining,
+        slotsUsed,
+        totalLimit: this.limit,
+        urls: toDownload.map((l) => l.substring(0, 100)),
+      });
 
       for (const link of toDownload) {
         if (slotsUsed >= this.limit) break;
@@ -222,7 +288,7 @@ export class Bing {
       }
 
       if (slotsUsed === slotsBefore) {
-        console.warn("No images could be downloaded from this page");
+        log.warn("No images could be downloaded from this page");
         break;
       }
 
@@ -231,9 +297,11 @@ export class Bing {
       this.backoff = BACKOFF_INITIAL;
     }
 
-    if (this.verbose) {
-      console.log(`\n[%] Done. Downloaded ${this.images.length} images.`);
-    }
+    log.info("Download run complete", {
+      downloaded: this.images.length,
+      skipped: this.skipped,
+      errors: this.errors.length,
+    });
   }
 
   // ─── Download a single image ──────────────────────────────────────
@@ -247,6 +315,10 @@ export class Bing {
     let ext = extname(urlPath).replace(".", "").toLowerCase();
 
     if (!VALID_IMAGE_EXTENSIONS.has(ext)) {
+      log.trace("Extension not recognized — using jpg fallback", {
+        originalExt: ext,
+        urlPath: urlPath.substring(0, 120),
+      });
       ext = "jpg"; // fallback
     }
 
@@ -255,6 +327,8 @@ export class Bing {
       `${this.imageName}_${index}.${ext}`,
     );
 
+    log.trace("Target file path", { index, filePath, ext, sourceUrl: link.substring(0, 120) });
+
     // Resume: skip if file already exists
     if (!this.forceReplace) {
       try {
@@ -262,32 +336,30 @@ export class Bing {
           fs.stat(filePath),
         );
         if (stat.isFile()) {
-          if (this.verbose) {
-            console.log(`Skipping already-downloaded image #${index}`);
-          }
+          log.info(`Skipping existing image #${index}`);
+          log.trace("File already on disk", { filePath, size: stat.size });
           this.skipped++;
           return "skip";
         }
       } catch {
-        // File doesn't exist — proceed
+        log.trace("File not on disk — will download", { filePath });
       }
+    } else {
+      log.trace("forceReplace on — will overwrite if exists", { filePath });
     }
 
-    if (this.verbose) {
-      console.log(`Downloading Image #${index} from ${link}`);
-    }
+    log.debug(`Downloading image #${index}`, { url: link });
 
     try {
       await this.saveImage(link, filePath);
-      if (this.verbose) {
-        console.log(`Downloaded File #${index}`);
-      }
+      log.debug(`Downloaded image #${index}`);
       return "ok";
     } catch (e) {
       this.errors.push({ url: link, error: e as Error });
-      if (this.verbose) {
-        console.error(`Issue getting image ${link}: ${(e as Error).message}`);
-      }
+      log.warn(`Download failed for image #${index}`, {
+        url: link,
+        error: (e as Error).message,
+      });
       return "fail";
     }
   }
@@ -305,6 +377,16 @@ export class Bing {
         },
         signal: AbortSignal.timeout(this.timeout * 1000),
       });
+
+      log.trace("Image fetch response", {
+        url: link.substring(0, 120),
+        status: resp.status,
+        statusText: resp.statusText,
+        contentType: resp.headers.get("content-type"),
+        contentLength: resp.headers.get("content-length"),
+        contentDisposition: resp.headers.get("content-disposition"),
+      });
+
       if (!resp.ok) {
         throw new NetworkError(
           link,
@@ -313,6 +395,11 @@ export class Bing {
       }
     } catch (e) {
       if (e instanceof NetworkError) throw e;
+      log.trace("Image fetch threw non-NetworkError", {
+        url: link.substring(0, 120),
+        error: (e as Error).message,
+        errorType: (e as Error).constructor.name,
+      });
       throw new NetworkError(link, `fetch error: ${(e as Error).message}`);
     }
 
@@ -320,13 +407,25 @@ export class Bing {
 
     // Validate MIME type from Content-Type header
     const contentType = resp.headers.get("Content-Type") ?? "";
+    log.debug("Image fetched", {
+      url: link.substring(0, 100),
+      size: image.byteLength,
+      contentType,
+      status: resp.status,
+    });
     if (!contentType.startsWith("image/")) {
+      log.trace("Invalid content-type — not an image", {
+        url: link.substring(0, 120),
+        contentType,
+      });
       throw new InvalidImageError(link);
     }
 
     // MD5 dedup
     const fileHash = createHash("md5").update(image).digest("hex");
+    log.trace("Computed MD5", { hash: fileHash, url: link.substring(0, 100) });
     if (this.fileHashes.has(fileHash)) {
+      log.debug("Duplicate image skipped (MD5)", { url: link.substring(0, 100) });
       throw new DuplicateImageError(link);
     }
     this.fileHashes.add(fileHash);
@@ -335,12 +434,26 @@ export class Bing {
     const ext = MIME_TO_EXT[contentType.split(";")[0]] ?? "jpg";
     const finalPath = filePath.replace(/\.[^.]+$/, `.${ext}`);
 
+    log.trace("Resolved file extension", {
+      contentType,
+      ext,
+      requestedPath: filePath,
+      finalPath,
+    });
+
     // Atomic write: temp file → rename
     const tmpPath = join(tmpdir(), `.tmp_${basename(finalPath)}_${Date.now()}`);
+    log.trace("Atomic write", { tmpPath, finalPath, size: image.byteLength });
     try {
       await writeFile(tmpPath, image);
       await rename(tmpPath, finalPath);
+      log.debug("Image saved", { path: finalPath, size: image.byteLength });
     } catch (e) {
+      log.trace("Write/rename failed", {
+        tmpPath,
+        finalPath,
+        error: (e as Error).message,
+      });
       // Clean up temp file on failure
       try {
         await import("node:fs/promises").then((fs) => fs.unlink(tmpPath));
@@ -354,7 +467,7 @@ export class Bing {
     }
 
     // Record success
-    this.images.push({
+    const result: ImageResult = {
       path: finalPath,
       sourceUrl: link,
       engine: "bing",
@@ -362,7 +475,9 @@ export class Bing {
       imageIndex: this.images.length + 1,
       sizeBytes: image.byteLength,
       mimeType: contentType.split(";")[0],
-    });
+    };
+    log.trace("Recording image result", result);
+    this.images.push(result);
   }
 
   // ─── Backoff helpers ──────────────────────────────────────────────

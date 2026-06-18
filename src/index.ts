@@ -28,6 +28,11 @@
 
 export type { ImageResult, Result } from "./types.js";
 
+// ─── Debugging (off by default — opt in with debug.enable()) ─────────
+
+export { debug } from "./debug.js";
+export type { LogLevel, LogEntry, LogHandler } from "./debug.js";
+
 // ─── Error hierarchy ─────────────────────────────────────────────────
 
 export {

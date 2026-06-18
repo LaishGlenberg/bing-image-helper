@@ -4,13 +4,15 @@
  */
 
 import { searchBingImages } from "./bing-media.js";
+import { debug } from "./debug.js";
 
 async function main() {
-  const queries = ["Laish Glenberg LinkedIn ASU CS"];
+  debug.enable('trace');
+  const queries = ["cats"];
 
   for (const query of queries) {
     console.log(`\n=== "${query}" ===\n`);
-    const results = await searchBingImages({ query, limit: 3 });
+    const results = await searchBingImages({ query, limit: 2 });
 
     console.log(`Found ${results.length} results:\n`);
 

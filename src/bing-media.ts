@@ -13,6 +13,9 @@
  *   // <img src={results[0].thumbnailUrl} />
  */
 
+import { createLogger } from "./debug.js";
+
+const log = createLogger("bing-media");
 const PAGE_SIZE = 35;
 
 const HEADERS: Record<string, string> = {
@@ -73,6 +76,7 @@ export async function searchBingImages(
 
   while (results.length < limit) {
     const url = buildPageUrl(query, page, adult, mkt);
+    log.debug("Fetching page", { page, url });
 
     let html: string;
     try {
@@ -84,7 +88,19 @@ export async function searchBingImages(
         throw new Error(`HTTP ${resp.status}`);
       }
       html = await resp.text();
+      log.debug("Received HTML", { page, length: html.length, status: resp.status });
+      log.trace("Response details", {
+        page,
+        url: url.substring(0, 150),
+        status: resp.status,
+        statusText: resp.statusText,
+        contentType: resp.headers.get("content-type"),
+        contentEncoding: resp.headers.get("content-encoding"),
+        htmlPreview: html.substring(0, 500),
+        htmlSuffix: html.length > 500 ? html.substring(html.length - 200) : "",
+      });
     } catch (e) {
+      log.warn("Fetch failed", { page, error: (e as Error).message });
       // Network error or timeout — try next page after brief pause
       if (page < 5) {
         page++;
@@ -96,21 +112,42 @@ export async function searchBingImages(
 
     // Parse each image card from the HTML
     const cards = parseImageCards(html);
+    log.debug("Parsed cards", { page, cardCount: cards.length });
 
-    if (cards.length === 0) break;
+    if (cards.length === 0) {
+      log.info("No cards found — stopping pagination");
+      break;
+    }
 
     for (const card of cards) {
       if (results.length >= limit) break;
 
       // Dedupe by thumbnail URL (Bing sometimes repeats)
       const thumbKey = card.turl ?? card.murl;
-      if (!thumbKey || seenThumbUrls.has(thumbKey)) continue;
+      if (!thumbKey || seenThumbUrls.has(thumbKey)) {
+        log.trace("Deduped by thumbnail URL", {
+          thumbKey: thumbKey?.substring(0, 100),
+          reason: !thumbKey ? "no thumbnail key" : "already seen",
+        });
+        continue;
+      }
 
       const sourceUrl = card.murl ?? "";
-      if (sourceUrl && seenSourceUrls.has(sourceUrl)) continue;
+      if (sourceUrl && seenSourceUrls.has(sourceUrl)) {
+        log.trace("Deduped by source URL", { sourceUrl: sourceUrl.substring(0, 100) });
+        continue;
+      }
 
       if (sourceUrl) seenSourceUrls.add(sourceUrl);
       if (thumbKey) seenThumbUrls.add(thumbKey);
+
+      log.trace("Accepted result", {
+        index: results.length,
+        thumb: card.turl?.substring(0, 100),
+        source: sourceUrl.substring(0, 100),
+        page: card.purl?.substring(0, 100),
+        title: card.desc?.substring(0, 80),
+      });
 
       results.push({
         thumbnailUrl: card.turl ?? sourceUrl,
@@ -123,11 +160,27 @@ export async function searchBingImages(
     }
 
     // If we got fewer results than page size, we're probably at the end
-    if (cards.length < PAGE_SIZE) break;
+    if (cards.length < PAGE_SIZE) {
+      log.trace("Ending pagination — fewer cards than page size", {
+        cards: cards.length,
+        pageSize: PAGE_SIZE,
+        page,
+      });
+      break;
+    }
 
     page++;
-    if (page > 28) break; // safety: ~1000 results max
+    if (page > 28) {
+      log.trace("Hit max page limit — safety cut-off", { page });
+      break;
+    }
   }
+
+  log.info(`Search complete`, {
+    query,
+    totalResults: results.length,
+    pagesFetched: page + 1,
+  });
 
   return results;
 }
@@ -149,8 +202,10 @@ function parseImageCards(html: string): ImageCard[] {
   // Bing wraps each image result with an m="{...}" JSON attribute.
   // The JSON uses &quot; for quotes (HTML-encoded).
   const cardRe = /m="\{&quot;[^}]*\}"/g;
+  const rawMatches = [...html.matchAll(cardRe)];
+  log.trace("JSON card parsing", { matchCount: rawMatches.length });
 
-  for (const match of html.matchAll(cardRe)) {
+  for (const match of rawMatches) {
     try {
       // Extract JSON string, decode HTML entities, unescape
       const raw = match[0]
@@ -168,14 +223,26 @@ function parseImageCards(html: string): ImageCard[] {
       if (m.w) card.width = Number(m.w);
       if (m.h) card.height = Number(m.h);
 
+      log.trace("Parsed card (JSON)", {
+        murl: m.murl?.substring(0, 120),
+        turl: m.turl?.substring(0, 120),
+        purl: m.purl?.substring(0, 120),
+        desc: m.desc?.substring(0, 100),
+        w: m.w,
+        h: m.h,
+      });
+
       cards.push(card);
     } catch {
+      log.trace("Skipped malformed JSON card", { raw: match[0].substring(0, 200) });
       // Skip malformed entries
     }
   }
 
   // Fallback: if the JSON approach didn't work, regex the turl/murl/purl directly.
   if (cards.length === 0) {
+    log.trace("Falling back to regex extraction");
+
     const murls = [...html.matchAll(/murl&quot;:&quot;(.*?)&quot;/g)].map(
       (m) => m[1],
     );
@@ -185,6 +252,12 @@ function parseImageCards(html: string): ImageCard[] {
     const purls = [...html.matchAll(/purl&quot;:&quot;(.*?)&quot;/g)]
       .map((m) => m[1])
       .filter(Boolean);
+
+    log.trace("Regex fallback counts", {
+      murlCount: murls.length,
+      turlCount: turls.length,
+      purlCount: purls.length,
+    });
 
     for (let i = 0; i < Math.max(murls.length, turls.length, purls.length); i++) {
       cards.push({

@@ -9,6 +9,7 @@ src/
   index.ts          Barrel exports — the public API surface
   bing.ts           Bing class: downloads images to disk (dedup, resume, atomic writes)
   bing-media.ts     searchBingImages(): returns Bing CDN thumbnail URLs (safe for <img>)
+  debug.ts          Centralized debug logger (off by default, custom handlers)
   types.ts          Shared types: ImageResult, Result
   errors.ts         Error hierarchy: ImageSaveError → NetworkError, InvalidImageError, etc.
   constants.ts      Shared constants: valid extensions, MIME map, HTTP headers
@@ -57,6 +58,16 @@ dist/               Compiled output (emitted by tsc, shipped in the npm package)
 
 **Key options**: `query`, `limit`, `adult`, `mkt`, `timeout`
 
+## Debug system (src/debug.ts)
+
+- **Off by default** — zero overhead when disabled
+- `debug.enable()` / `debug.disable()` / `debug.setLevel("debug")` — global on/off
+- `debug.setHandler(entry => ...)` — replace console output with custom logger (Firebase, pino, winston)
+- Each module creates its own logger via `createLogger("moduleName")` with `.debug()`, `.info()`, `.warn()`, `.error()` methods
+- The `Bing` class auto-enables debug at `"info"` level when `verbose: true` is passed
+- Log levels: `"off"` | `"error"` | `"warn"` | `"info"` | `"debug"`
+- Structured log entries include `timestamp`, `level`, `module`, `message`, `data`
+
 ## Adding a new API / engine
 
 1. Create a new file in `src/` (e.g. `src/google-images.ts`)
@@ -72,4 +83,5 @@ dist/               Compiled output (emitted by tsc, shipped in the npm package)
 - No default exports — all exports are named
 - Errors extend `ImageSaveError` with a `reason` discriminator and the failing `url`
 - Shared constants live in `constants.ts` (not duplicated across modules)
+- All internal logging goes through `createLogger("moduleName")` from `debug.ts` — never use `console.log` directly
 - Tests are standalone scripts (not a test framework) — run with `npx tsx src/test-bing.ts`

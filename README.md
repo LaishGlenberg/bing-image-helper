@@ -70,6 +70,32 @@ All download errors extend `ImageSaveError`:
 import { ImageSaveError, NetworkError } from "@lglen/bing-image-search";
 ```
 
+### Debugging
+
+Debug logging is **off by default**. Enable it to see internal requests, parsed data, and errors:
+
+```ts
+import { debug } from "@lglen/bing-image-search";
+
+debug.enable();                     // default level: "debug"
+debug.setLevel("info");             // quieter — only info, warn, error
+debug.setLevel("trace");            // FULL debug output, quite large
+```
+
+**Custom handler** — useful for Firebase Cloud Functions or structured logging:
+
+```ts
+import { debug } from "@lglen/bing-image-search";
+
+debug.enable();
+debug.setHandler((entry) => {
+  // entry.timestamp, entry.level, entry.module, entry.message, entry.data
+  console.log(JSON.stringify(entry));
+});
+```
+
+Levels: `"off"` | `"error"` | `"warn"` | `"info"` | `"debug"` | `"trace"`
+
 ## License
 
 MIT
