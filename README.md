@@ -63,6 +63,29 @@ console.log(bing.skipped);  // number already on disk
 console.log(bing.errors);   // { url, error }[] — failed downloads
 ```
 
+### Proxy / relay
+
+Route Bing search requests through your own server (e.g. a Cloud Function behind ngrok):
+
+```ts
+// Both APIs accept the same options:
+const results = await searchBingImages({
+  query: "cats",
+  relayUrl: "https://abc123.ngrok-free.app/bing",
+  clientIp: "1.2.3.4",   // logged in debug output
+});
+
+const bing = new Bing({
+  query: "cats",
+  limit: 5,
+  outputDir: "./cats",
+  relayUrl: "https://abc123.ngrok-free.app/bing",
+  clientIp: "1.2.3.4",
+});
+```
+
+The relay receives `GET <relayUrl>?url=<encodedBingUrl>` and should proxy the response through.
+
 ### Error types
 
 All download errors extend `ImageSaveError`:

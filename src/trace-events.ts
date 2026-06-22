@@ -20,6 +20,13 @@
  */
 
 export const TraceEvents = {
+  // ─── Shared (used by both APIs) ───────────────────────────────────
+
+  Shared: {
+    /** Emitted once per search with caller context (relay URL, client IP). */
+    SearchContext: "search_context",
+  },
+
   // ─── bing-media.ts ────────────────────────────────────────────────
 
   BingMedia: {
@@ -73,5 +80,6 @@ export const TraceEvents = {
 
 /** Union of every trace event ID string. */
 export type TraceEventId =
+  | (typeof TraceEvents.Shared)[keyof typeof TraceEvents.Shared]
   | (typeof TraceEvents.BingMedia)[keyof typeof TraceEvents.BingMedia]
   | (typeof TraceEvents.Bing)[keyof typeof TraceEvents.Bing];

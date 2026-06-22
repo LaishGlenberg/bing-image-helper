@@ -15,9 +15,11 @@
 
 import { createLogger } from "./debug.js";
 import { TraceEvents } from "./trace-events.js";
+import { applyRelay } from "./constants.js";
 
 const log = createLogger("bing-media");
 const T = TraceEvents.BingMedia;
+const TS = TraceEvents.Shared;
 const PAGE_SIZE = 35;
 
 const HEADERS: Record<string, string> = {
@@ -54,6 +56,14 @@ export interface SearchBingOptions {
   mkt?: string;
   /** Timeout per request in seconds (default 30). */
   timeout?: number;
+  /**
+   * Proxy all Bing search requests through this relay URL.
+   * The relay must accept `GET <relayUrl>?url=<encodedBingUrl>`.
+   * @example "https://abc123.ngrok-free.app/bing"
+   */
+  relayUrl?: string;
+  /** Optional client IP to include in debug logs (for diagnosing region-specific issues). */
+  clientIp?: string;
 }
 
 /**
@@ -69,7 +79,11 @@ export async function searchBingImages(
     adult = "moderate",
     mkt = "en-US",
     timeout = 30,
+    relayUrl,
+    clientIp,
   } = options;
+
+  log.trace(TS.SearchContext, { query, relayUrl, clientIp });
 
   const results: BingImageResult[] = [];
   let page = 0;
@@ -77,8 +91,9 @@ export async function searchBingImages(
   const seenThumbUrls = new Set<string>();
 
   while (results.length < limit) {
-    const url = buildPageUrl(query, page, adult, mkt);
-    log.debug("Fetching page", { page, url });
+    const bingUrl = buildPageUrl(query, page, adult, mkt);
+    const url = applyRelay(bingUrl, relayUrl);
+    log.debug("Fetching page", { page, url: url.substring(0, 200) });
 
     let html: string;
     try {
@@ -93,7 +108,8 @@ export async function searchBingImages(
       log.debug("Received HTML", { page, length: html.length, status: resp.status });
       log.trace("Response details", {
         page,
-        url: url.substring(0, 150),
+        bingUrl: bingUrl.substring(0, 200),
+        url: url.substring(0, 200),
         status: resp.status,
         statusText: resp.statusText,
         contentType: resp.headers.get("content-type"),

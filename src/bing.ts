@@ -19,12 +19,14 @@ import {
   VALID_IMAGE_EXTENSIONS,
   MIME_TO_EXT,
   DEFAULT_HEADERS,
+  applyRelay,
 } from "./constants.js";
 import { createLogger, debug } from "./debug.js";
 import { TraceEvents } from "./trace-events.js";
 
 const log = createLogger("bing");
 const T = TraceEvents.Bing;
+const TS = TraceEvents.Shared;
 
 const PAGE_SIZE = 35;
 const BACKOFF_INITIAL = 2.0;
@@ -43,6 +45,15 @@ export interface BingOptions {
   name?: string;
   forceReplace?: boolean;
   mkt?: string;
+  /**
+   * Proxy all Bing search requests through this relay URL.
+   * The relay must accept `GET <relayUrl>?url=<encodedBingUrl>`.
+   * Image downloads from source hosts go direct — only Bing search calls are relayed.
+   * @example "https://abc123.ngrok-free.app/bing"
+   */
+  relayUrl?: string;
+  /** Optional client IP to include in debug logs (for diagnosing region-specific issues). */
+  clientIp?: string;
 }
 
 export class Bing {
@@ -57,6 +68,8 @@ export class Bing {
   readonly imageName: string;
   readonly forceReplace: boolean;
   readonly mkt: string;
+  readonly relayUrl?: string;
+  readonly clientIp?: string;
 
   private seen: Set<string> = new Set();
   private fileHashes: Set<string> = new Set();
@@ -81,6 +94,8 @@ export class Bing {
     this.imageName = options.name ?? "Image";
     this.forceReplace = options.forceReplace ?? false;
     this.mkt = options.mkt ?? "en-US";
+    this.relayUrl = options.relayUrl;
+    this.clientIp = options.clientIp;
 
     // Wire verbose into the global debug system so consumers
     // can set a custom handler and still see Bing download logs.
@@ -126,8 +141,9 @@ export class Bing {
   // ─── Fetch a single Bing results page ─────────────────────────────
 
   private async fetchPage(page: number): Promise<string> {
-    const url = this.buildPageUrl(page);
-    log.trace("Fetching Bing page", { page, url: url.substring(0, 200) });
+    const bingUrl = this.buildPageUrl(page);
+    const url = applyRelay(bingUrl, this.relayUrl);
+    log.trace("Fetching Bing page", { page, bingUrl: bingUrl.substring(0, 200), url: url.substring(0, 200) });
 
     const resp = await fetch(url, {
       headers: {
@@ -185,6 +201,11 @@ export class Bing {
   // ─── Main run loop ────────────────────────────────────────────────
 
   async run(): Promise<void> {
+    log.trace(TS.SearchContext, {
+      query: this.query,
+      relayUrl: this.relayUrl,
+      clientIp: this.clientIp,
+    });
     log.trace("Bing download run starting", {
       query: this.query,
       limit: this.limit,

@@ -36,3 +36,14 @@ export const DEFAULT_HEADERS: Record<string, string> = {
   "Accept-Language": "en-US,en;q=0.9",
   "Accept-Encoding": "gzip, deflate",
 };
+
+/**
+ * If a relay URL is configured, wrap the Bing URL through it.
+ * The relay is expected to proxy the request: `GET <relayUrl>?url=<encodedBingUrl>`
+ */
+export function applyRelay(bingUrl: string, relayUrl?: string): string {
+  if (!relayUrl) return bingUrl;
+  // Strip trailing slashes so the consumer can use "https://x.ngrok-free.app/bing" or "…/bing/"
+  const base = relayUrl.replace(/\/+$/, "");
+  return `${base}?url=${encodeURIComponent(bingUrl)}`;
+}

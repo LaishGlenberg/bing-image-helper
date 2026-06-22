@@ -15,7 +15,12 @@ async function main() {
 
   for (const query of queries) {
     console.log(`\n=== "${query}" ===\n`);
-    const results = await searchBingImages({ query, limit: 2 });
+    const results = await searchBingImages({
+      query,
+      limit: 2,
+      relayUrl: "https://devotedly-kangaroo-jawline.ngrok-free.dev",  // route through relay
+      // clientIp: "1.2.3.4",                                  // attach caller IP to debug logs
+    });
 
     console.log(`Found ${results.length} results:\n`);
 

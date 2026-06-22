@@ -2,6 +2,10 @@
 
 TypeScript SDK for searching and downloading images from Bing. Published as an ESM-only npm package.
 
+## Quick notes for agents
+
+- Whenever you add a new feature, make sure to update AGENTS.md, README.md, and CHANGELOG.md
+
 ## Project structure
 
 ```
